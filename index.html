@@ -10,7 +10,7 @@
 body { margin:0; font-family: Inter, Arial; display:flex; background:#f0f2f7; }
 
 .sidebar {
-  width:360px;
+  width:250px;
   height:100vh;
   background:#f7f9fc;
   display:flex;
@@ -39,10 +39,20 @@ body { margin:0; font-family: Inter, Arial; display:flex; background:#f0f2f7; }
 
 select {
   width:100%;
-  padding:8px;
-  border-radius:8px;
-  margin-bottom:10px;
+  padding:6px 12px;              /* lebih kecil */
+  border-radius:999px;           /* capsule */
+  margin-bottom:8px;
   border:1px solid #ddd;
+  font-size:12px;
+  background:#fff;
+  outline:none;
+  cursor:pointer;
+  transition:all 0.2s ease;
+}
+
+select:focus {
+  border-color:#2563eb;
+  box-shadow:0 0 0 2px rgba(37,99,235,0.15);
 }
 
 /* SUMMARY */
@@ -308,13 +318,49 @@ function render(data){
     let key=mode==="cycle"?d.cycle:mode==="rayon"?d.rayon:d.sales;
     let color=colorGen(key);
 
-    let m=L.circleMarker([d.lat,d.lng],{
-      radius:6,
-      color:color,
-      fillColor:color,
-      fillOpacity:0.9
-    }).addTo(layer);
+    // 🔥 MARKER + POPUP
+    let m = L.circleMarker([d.lat, d.lng], {
+      radius: 6,
+      color: color,
+      fillColor: color,
+      fillOpacity: 0.9
+    })
+    .addTo(layer);
 
+    // 🔥 POPUP
+    let popupContent = `
+      <div style="font-size:13px;line-height:1.6">
+        <b>${d.kode_outlet} - ${d.nama_outlet}</b><br>
+        ${d.rayon} | ${d.cycle}<br>
+        ${d.sales}<br>
+        <span style="color:#2563eb;font-weight:600">
+          OMS: ${formatRupiah(d.avg_oms)}
+        </span><br><br>
+        <a href="https://www.google.com/maps?q=${d.lat},${d.lng}" target="_blank">
+          📍 Google Maps
+        </a>
+      </div>
+    `;
+
+    m.bindPopup(popupContent);
+
+    // 🔥 PASTIIN KLIK MUNCUL
+    m.on('click', function(){
+      this.openPopup();
+    });
+
+// 🔥 bind popup TERPISAH (lebih aman)
+m.bindPopup(`
+  <b>${d.kode_outlet} - ${d.nama_outlet}</b><br>
+  ${d.rayon} | ${d.cycle}<br>
+  ${d.sales}<br>
+  OMS: ${formatRupiah(d.avg_oms)}<br><br>
+  <a href="https://www.google.com/maps?q=${d.lat},${d.lng}" target="_blank">
+    📍Google Maps
+  </a>
+`);
+
+    // ===== LIST KIRI =====
     let div=document.createElement("div");
     div.className="item";
 
