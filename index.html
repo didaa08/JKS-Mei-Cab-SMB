@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>JKS Cab Semarang Mei 26</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+<style>
+body { margin:0; font-family: Inter, Arial; display:flex; background:#f0f2f7; }
+
+.sidebar {
+  width:360px;
+  height:100vh;
+  background:#f7f9fc;
+  display:flex;
+  flex-direction:column;
+  border-right:1px solid #e3e6ee;
+}
+
+.header {
+  background:linear-gradient(135deg,#121c30,#121c30);
+  color:white;
+  padding:16px;
+  font-weight:700;
+}
+
+.filter { padding:12px; }
+
+.label {
+  font-size:11px;
+  font-weight:600;
+  color:#888;
+  margin-bottom:4px;
+  margin-top:6px;
+  display:block;
+  letter-spacing:0.3px;
+}
+
+select {
+  width:100%;
+  padding:8px;
+  border-radius:8px;
+  margin-bottom:10px;
+  border:1px solid #ddd;
+}
+
+/* SUMMARY */
+.summary {
+  padding:12px;
+  border-top:1px solid #eee;
+  border-bottom:1px solid #eee;
+}
+
+.card {
+  background:white;
+  padding:12px;
+  border-radius:10px;
+  box-shadow:0 4px 10px rgba(0,0,0,0.05);
+}
+
+.sales { font-weight:700; font-size:13px; }
+.meta { font-size:12px; color:#555; margin-top:3px; }
+.oms { font-size:13px; color:#2c6ef2; font-weight:600; margin-top:6px; }
+.extra { font-size:11px; color:#888; margin-top:4px; }
+
+/* LIST */
+.list { flex:1; overflow-y:auto; }
+
+.item {
+  padding:12px;
+  border-bottom:1px solid #eee;
+  background:white;
+  cursor:pointer;
+  transition:all 0.2s ease;
+}
+
+.item:hover {
+  background:#eef3ff;
+  transform:translateX(4px);
+}
+
+#map { flex:1; }
+</style>
+</head>
+
+<body>
+
+<div class="sidebar">
+
+  <div class="header">
+    JKS May 26
+    Cab Semarang<br>
+    <span id="totalData">0 toko</span>
+  </div>
+
+<div class="filter">
+
+  <label class="label">Depo</label>
+  <select id="filterDepo"></select>
+
+  <label class="label">Salesman</label>
+  <select id="filterSales"></select>
+
+  <label class="label">Rayon</label>
+  <select id="filterRayon"></select>
+
+  <label class="label">Cycle</label>
+  <select id="filterCycle"></select>
+
+</div>
+
+  <div class="summary">
+    <div id="summaryBox"></div>
+  </div>
+
+  <div class="list" id="listContainer"></div>
+
+</div>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<script>
+var map = L.map('map').setView([-6.99,110.42],12);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+let allData=[];
+let layer=L.layerGroup().addTo(map);
+
+// ===== UTIL =====
+function formatRupiah(x){
+  return Math.round(x||0).toString().replace(/\B(?=(\d{3})+(?!\d))/g,".");
+}
+
+function hash(str){
+  let h=0;
+  for(let i=0;i<str.length;i++){h=str.charCodeAt(i)+((h<<5)-h);}
+  return h;
+}
+
+function colorGen(key){
+  const c=["#e74c3c","#3498db","#27ae60","#f39c12","#8e44ad","#16a085"];
+  return c[Math.abs(hash(key))%c.length];
+}
+
+// ===== LOAD =====
+fetch('data.json')
+.then(r=>r.json())
+.then(data=>{
+  allData=data;
+  fillDropdown("filterDepo", [...new Set(data.map(d=>d.depo))]);
+  applyFilter();
+});
+
+// ===== DROPDOWN =====
+function fillDropdown(id, list, selected="ALL"){
+  let select=document.getElementById(id);
+  select.innerHTML='<option value="ALL">Semua</option>';
+
+  list.forEach(v=>{
+    let o=document.createElement("option");
+    o.value=v;
+    o.textContent=v;
+    if(v===selected) o.selected=true;
+    select.appendChild(o);
+  });
+}
+
+// ===== DEPENDENT =====
+function updateDropdowns(){
+
+  let depo=document.getElementById("filterDepo").value;
+  let sales=document.getElementById("filterSales").value;
+  let rayon=document.getElementById("filterRayon").value;
+  let cycle=document.getElementById("filterCycle").value;
+
+  let filtered=allData;
+
+  if(depo!=="ALL"){
+    filtered=filtered.filter(d=>d.depo===depo);
+  }
+
+  let salesList=[...new Set(filtered.map(d=>d.sales))];
+  fillDropdown("filterSales", salesList, sales);
+  if(!salesList.includes(sales)) sales="ALL";
+
+  if(sales!=="ALL"){
+    filtered=filtered.filter(d=>d.sales===sales);
+  }
+
+  let rayonList=[...new Set(filtered.map(d=>d.rayon))];
+  fillDropdown("filterRayon", rayonList, rayon);
+  if(!rayonList.includes(rayon)) rayon="ALL";
+
+  if(rayon!=="ALL"){
+    filtered=filtered.filter(d=>d.rayon===rayon);
+  }
+
+  let cycleList=[...new Set(filtered.map(d=>d.cycle))];
+  fillDropdown("filterCycle", cycleList, cycle);
+  if(!cycleList.includes(cycle)){
+    document.getElementById("filterCycle").value="ALL";
+  }
+}
+
+// ===== APPLY FILTER =====
+function applyFilter(){
+
+  updateDropdowns();
+
+  let depo=document.getElementById("filterDepo").value;
+  let sales=document.getElementById("filterSales").value;
+  let rayon=document.getElementById("filterRayon").value;
+  let cycle=document.getElementById("filterCycle").value;
+
+  let filtered=allData.filter(d=>{
+    return (depo==="ALL"||d.depo===depo) &&
+           (sales==="ALL"||d.sales===sales) &&
+           (rayon==="ALL"||d.rayon===rayon) &&
+           (cycle==="ALL"||d.cycle===cycle);
+  });
+
+  render(filtered);
+  renderSummary(filtered);
+  autoZoom(filtered);
+}
+
+// ===== SMART AUTO ZOOM (ANTI OUTLIER) =====
+function autoZoom(data){
+
+  if(data.length===0) return;
+
+  if(data.length===1){
+    map.setView([data[0].lat,data[0].lng],16);
+    return;
+  }
+
+  let lats=data.map(d=>d.lat).sort((a,b)=>a-b);
+  let lngs=data.map(d=>d.lng).sort((a,b)=>a-b);
+
+  let mid=Math.floor(lats.length/2);
+  let medianLat=lats[mid];
+  let medianLng=lngs[mid];
+
+  let filtered=data.filter(d=>{
+    let dist=Math.sqrt(
+      Math.pow(d.lat-medianLat,2)+
+      Math.pow(d.lng-medianLng,2)
+    );
+    return dist<0.05;
+  });
+
+  if(filtered.length<5){
+    filtered=data;
+  }
+
+  let bounds=filtered.map(d=>[d.lat,d.lng]);
+  map.fitBounds(bounds,{padding:[40,40]});
+}
+
+// ===== SUMMARY =====
+function renderSummary(data){
+
+  let box=document.getElementById("summaryBox");
+
+  if(data.length===0){
+    box.innerHTML="";
+    return;
+  }
+
+  let salesSet=[...new Set(data.map(d=>d.sales))];
+  let rayonSet=[...new Set(data.map(d=>d.rayon))];
+  let cycleSet=[...new Set(data.map(d=>d.cycle))];
+
+  let totalOms=data.reduce((sum,d)=>sum+(d.avg_oms||0),0);
+  let avgOms=totalOms/data.length;
+
+  box.innerHTML=`
+    <div class="card">
+      <div class="sales">${salesSet.length===1?salesSet[0]:"Multiple Sales"}</div>
+      <div class="meta">${rayonSet.length===1?rayonSet[0]:"Multiple"} | ${cycleSet.length===1?cycleSet[0]:"Multiple"}</div>
+      <div class="oms">OMS: ${formatRupiah(totalOms)}</div>
+      <div class="extra">${data.length} toko • Avg: ${formatRupiah(avgOms)}</div>
+    </div>
+  `;
+}
+
+// ===== RENDER =====
+function render(data){
+
+  layer.clearLayers();
+  document.getElementById("listContainer").innerHTML="";
+  document.getElementById("totalData").innerText=data.length+" toko";
+
+  let sales=document.getElementById("filterSales").value;
+  let rayon=document.getElementById("filterRayon").value;
+  let cycle=document.getElementById("filterCycle").value;
+
+  let mode="sales";
+  if(cycle!=="ALL") mode="cycle";
+  else if(rayon!=="ALL") mode="cycle";
+  else if(sales!=="ALL") mode="rayon";
+
+  data.forEach(d=>{
+
+    let key=mode==="cycle"?d.cycle:mode==="rayon"?d.rayon:d.sales;
+    let color=colorGen(key);
+
+    let m=L.circleMarker([d.lat,d.lng],{
+      radius:6,
+      color:color,
+      fillColor:color,
+      fillOpacity:0.9
+    }).addTo(layer);
+
+    let div=document.createElement("div");
+    div.className="item";
+
+    div.innerHTML=`
+      <div class="sales">${d.nama_outlet}</div>
+      <div class="meta">${d.rayon} | ${d.cycle}</div>
+      <div class="oms">OMS: ${formatRupiah(d.avg_oms)}</div>
+    `;
+
+    div.onclick=function(){
+      map.setView([d.lat,d.lng],16);
+      m.openPopup();
+    };
+
+    document.getElementById("listContainer").appendChild(div);
+
+  });
+}
+
+// ===== EVENT =====
+["filterDepo","filterSales","filterRayon","filterCycle"]
+.forEach(id=>{
+  document.getElementById(id).addEventListener("change", applyFilter);
+});
+</script>
+
+</body>
+</html>
